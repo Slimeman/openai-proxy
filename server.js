@@ -37,30 +37,6 @@ app.post('/', async (req, res) => {
 });
 
 // ✅ Новый маршрут для получения заголовка с YouTube
-app.get('/get-title', async (req, res) => {
-  const videoId = req.query.videoId;
-  if (!videoId) {
-    return res.status(400).json({ error: 'videoId is required' });
-  }
-
-  try {
-    const youtubeUrl = `https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${videoId}&key=${YOUTUBE_API_KEY}`;
-    const response = await fetch(youtubeUrl);
-    const data = await response.json();
-
-    if (!data.items || data.items.length === 0) {
-      return res.status(404).json({ error: 'Видео не найдено' });
-    }
-
-    const title = data.items[0].snippet.title;
-    res.json({ title });
-  } catch (error) {
-    console.error('YouTube API error:', error);
-    res.status(500).json({ error: 'Ошибка сервера при запросе к YouTube' });
-  }
-});
-
-// ✅ Анализ видео
 app.get('/analyze-video', async (req, res) => {
   const videoId = req.query.videoId;
   if (!videoId) {
@@ -80,13 +56,13 @@ app.get('/analyze-video', async (req, res) => {
     const item = data.items[0];
     const stats = item.statistics;
     const snippet = item.snippet;
-    const duration = parseDuration(item.contentDetails.duration); // ISO 8601 to minutes
+    const duration = parseDuration(item.contentDetails.duration); // ISO 8601 → минуты
 
     const views = parseInt(stats.viewCount || 0);
     const likes = parseInt(stats.likeCount || 0);
-    const comments = parseInt(stats.commentCount || 0);
+    const comments = parseInt(stats.commentCount || 0); // ✅ теперь есть
     const engagement = ((likes + comments) / views) * 100 || 0;
-    const revenue = [views * 0.001, views * 0.005]; // CPM range $1–$5
+    const revenue = [views * 0.001, views * 0.005];
     const publishDate = new Date(snippet.publishedAt);
     const now = new Date();
     const ageInDays = Math.max((now - publishDate) / (1000 * 60 * 60 * 24), 1);
@@ -95,12 +71,14 @@ app.get('/analyze-video', async (req, res) => {
     res.json({
       channelTitle: snippet.channelTitle,
       title: snippet.title,
+      description: snippet.description, // ✅ добавили описание
       thumbnail: snippet.thumbnails?.medium?.url,
       language: snippet.defaultAudioLanguage || 'Не указано',
       publishedAt: snippet.publishedAt,
       duration: duration.toFixed(2),
       views,
       likes,
+      comments, // ✅ теперь возвращаем
       engagement: engagement.toFixed(2),
       revenueRange: revenue.map(r => `$${r.toFixed(2)}`),
       avgViewsPerDay: Math.round(avgViewsPerDay),
@@ -114,7 +92,6 @@ app.get('/analyze-video', async (req, res) => {
   }
 });
 
-// 👇 Вспомогательная функция для перевода ISO 8601 → минуты
 function parseDuration(isoDuration) {
   const match = isoDuration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
   if (!match) return 0;
@@ -123,7 +100,6 @@ function parseDuration(isoDuration) {
   const seconds = parseInt(match[3] || 0);
   return hours * 60 + minutes + seconds / 60;
 }
-
 
 app.listen(PORT, () => {
   console.log(`Proxy server running on port ${PORT}`);
