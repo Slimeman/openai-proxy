@@ -159,18 +159,34 @@ app.get('/youtube-trends', async (req, res) => {
   const query = req.query.query;
   if (!query) return res.status(400).json({ error: 'query is required' });
 
-  const publishedAfter = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(); // 7 дней назад
-  const apiUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query)}&maxResults=20&order=viewCount&publishedAfter=${publishedAfter}&type=video&regionCode=RU&key=${YOUTUBE_API_KEY}`;
+  const publishedAfter = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(); // последние 7 дней
 
   try {
-    const response = await fetch(apiUrl);
-    const data = await response.json();
-    res.json(data);
+    // 1. Получаем список видео по ключевику
+    const searchUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query)}&maxResults=20&order=viewCount&publishedAfter=${publishedAfter}&type=video&regionCode=RU&key=${YOUTUBE_API_KEY}`;
+    const searchRes = await fetch(searchUrl);
+    const searchData = await searchRes.json();
+
+    const videoIds = searchData.items.map(item => item.id.videoId).join(',');
+
+    // 2. Получаем доп. данные по видео (длительность + просмотры)
+    const detailsUrl = `https://www.googleapis.com/youtube/v3/videos?part=contentDetails,statistics,snippet&id=${videoIds}&key=${YOUTUBE_API_KEY}`;
+    const detailsRes = await fetch(detailsUrl);
+    const detailsData = await detailsRes.json();
+
+    // 3. Возвращаем клиенту данные
+    res.json({ items: detailsData.items.map(item => ({
+      id: item.id,
+      snippet: item.snippet,
+      statistics: item.statistics,
+      contentDetails: item.contentDetails
+    }))});
   } catch (error) {
-    console.error('Ошибка при получении трендов:', error);
+    console.error('Ошибка при получении YouTube трендов:', error);
     res.status(500).json({ error: 'Ошибка при запросе к YouTube API' });
   }
 });
+
 
 
 
