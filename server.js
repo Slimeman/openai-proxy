@@ -20,7 +20,7 @@ app.post('/', async (req, res) => {
         'Authorization': `Bearer ${API_KEY}`
       },
       body: JSON.stringify({
-        model: 'gpt-4',
+        model: 'gpt-4.1-nano',
         messages,
         temperature: 0.8
       })
