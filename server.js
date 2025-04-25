@@ -101,6 +101,60 @@ function parseDuration(isoDuration) {
   return hours * 60 + minutes + seconds / 60;
 }
 
+// ✅ Новый SEO-оптимизатор
+app.get('/seo-optimize', async (req, res) => {
+  const videoId = req.query.videoId;
+  if (!videoId) {
+    return res.status(400).json({ error: 'videoId is required' });
+  }
+
+  try {
+    // 1. Получаем title + description через внутренний API
+    const metaRes = await fetch(`http://localhost:${PORT}/analyze-video?videoId=${videoId}`);
+    const meta = await metaRes.json();
+
+    if (meta.error) {
+      return res.status(500).json({ error: 'Ошибка при получении данных видео' });
+    }
+
+    const prompt = `
+Ты лучший Ютубер и SEO-кликбейт специалист в мире.
+На основе данных ниже сделай:
+
+1. 5 кликбейтных названий для превью
+2. 5 SEO-оптимизированных заголовков
+3. SEO-оптимизированное описание видео
+
+Заголовок: ${meta.title}
+Описание: ${meta.description}
+    `.trim();
+
+    // 2. Отправляем в OpenAI через / (локальный proxy)
+    const gptRes = await fetch(`http://localhost:${PORT}/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: [{ role: 'user', content: prompt }] })
+    });
+
+    const gptData = await gptRes.json();
+
+    if (!gptData.choices) {
+      return res.status(500).json({ error: 'Ошибка от OpenAI' });
+    }
+
+    res.json({
+      originalTitle: meta.title,
+      originalDescription: meta.description,
+      optimizedText: gptData.choices[0].message.content
+    });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Ошибка при SEO оптимизации' });
+  }
+});
+
+
 app.listen(PORT, () => {
   console.log(`Proxy server running on port ${PORT}`);
 });
