@@ -154,6 +154,25 @@ app.get('/seo-optimize', async (req, res) => {
   }
 });
 
+// ✅ Ютуб тренды за 7 дней
+app.get('/youtube-trends', async (req, res) => {
+  const query = req.query.query;
+  if (!query) return res.status(400).json({ error: 'query is required' });
+
+  const publishedAfter = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(); // 7 дней назад
+  const apiUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query)}&maxResults=20&order=viewCount&publishedAfter=${publishedAfter}&type=video&regionCode=RU&key=${YOUTUBE_API_KEY}`;
+
+  try {
+    const response = await fetch(apiUrl);
+    const data = await response.json();
+    res.json(data);
+  } catch (error) {
+    console.error('Ошибка при получении трендов:', error);
+    res.status(500).json({ error: 'Ошибка при запросе к YouTube API' });
+  }
+});
+
+
 
 app.listen(PORT, () => {
   console.log(`Proxy server running on port ${PORT}`);
