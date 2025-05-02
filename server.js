@@ -57,7 +57,7 @@ app.post('/srt-summary', async (req, res) => {
     const vttUrl = selectedSub?.formats?.find(f => f.format === 'vtt')?.url;
 
     if (!txtUrl) {
-      return res.status(404).json({ error: 'TXT субтитры на русском не найдены' });
+      return res.status(404).json({ error: 'TXT субтитры на русском и английском не найдены' });
     }
 
     const txtText = await (await fetch(txtUrl)).text();
