@@ -98,6 +98,23 @@ app.post('/srt-summary', async (req, res) => {
   }
 });
 
+// скачивание текста
+app.get('/download-text', (req, res) => {
+  const { url } = req.query;
+  if (!url) return res.status(400).send('url is required');
+
+  const cached = summaryCache[url];
+  if (!cached || !cached.plainText) {
+    return res.status(404).send('Файл не найден');
+  }
+
+  const filename = (cached.meta?.title || 'video').replace(/[<>:"/\\|?*]+/g, '') + '.txt';
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+  res.send(cached.plainText);
+});
+
+
 
 // ✅ OpenAI Proxy (остается как есть)
 app.post('/', async (req, res) => {
