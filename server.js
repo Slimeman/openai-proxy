@@ -222,7 +222,7 @@ app.post('/gemini-summary', async (req, res) => {
     res.json({ summary: text });
 
   } catch (error) {
-    console.error('Gemini error:', error);
+    console.error('Gemini error:', error?.response?.status, error?.response?.statusText, await error?.response?.text?.());
     res.status(500).json({ error: 'Ошибка от Gemini API' });
   }
 });
