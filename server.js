@@ -215,26 +215,28 @@ app.post('/gemini-summary', async (req, res) => {
 Если ты не можешь напрямую анализировать видео, скажи, какие шаги я должен сделать, чтобы ты смог его обработать.
 `.trim();
 
-try {
-  const result = await genAI.models.generateContent({
-    model: 'models/gemini-1.5-pro',
-    contents: [
-      {
-        role: 'user',
-        parts: [{ text: prompt }]
-      }
-    ]
-  });
+  try {
+    const result = await genAI.models.generateContent({
+      model: 'models/gemini-1.5-pro',
+      contents: [
+        {
+          role: 'user',
+          parts: [{ text: prompt }]
+        }
+      ]
+    });
 
-  console.log('Gemini raw:', JSON.stringify(result, null, 2));
+    console.log('Gemini raw:', JSON.stringify(result, null, 2));
 
-  const text = result?.response?.candidates?.[0]?.content?.parts?.[0]?.text || 'Ответ не получен';
-  res.json({ summary: text });
+    const text = result?.response?.candidates?.[0]?.content?.parts?.[0]?.text || 'Ответ не получен';
+    res.json({ summary: text });
 
-} catch (error) {
-  console.error('Gemini error:', error);
-  res.status(500).json({ error: error.message || 'Ошибка от Gemini API' });
-}
+  } catch (error) {
+    console.error('Gemini error:', error);
+    res.status(500).json({ error: error.message || 'Ошибка от Gemini API' });
+  }
+});
+
 
 
 app.listen(PORT, () => {
