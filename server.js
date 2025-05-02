@@ -23,7 +23,7 @@ app.post('/srt-summary', async (req, res) => {
   if (!url) return res.status(400).json({ error: 'url is required' });
 
   try {
-    // 1. Запрашиваем Downsub API
+    // 1. Получаем ответ от Downsub
     const downsubRes = await fetch('https://api.downsub.com/download', {
       method: 'POST',
       headers: {
@@ -34,23 +34,37 @@ app.post('/srt-summary', async (req, res) => {
     });
 
     const downsubData = await downsubRes.json();
+    const subtitles = downsubData?.data?.subtitles || [];
 
-    if (!downsubRes.ok || !downsubData?.srt) {
-      console.error('Downsub error:', downsubData);
-      return res.status(500).json({ error: 'Ошибка при получении SRT с Downsub' });
+    // 2. Ищем русский SRT
+    const ruSrtUrl = subtitles
+      .find(sub => sub.language.toLowerCase().includes('russian'))
+      ?.formats?.find(f => f.format === 'srt')?.url;
+
+    if (!ruSrtUrl) {
+      return res.status(404).json({ error: 'Русский SRT не найден' });
     }
 
-    // 2. Скачиваем SRT-файл
-    const srtText = await (await fetch(downsubData.srt)).text();
-
-    // 3. Превращаем SRT в plain text
+    // 3. Скачиваем SRT и подготавливаем текст
+    const srtText = await (await fetch(ruSrtUrl)).text();
     const plainText = srtText
       .replace(/\d+\n/g, '')
       .replace(/\d{2}:\d{2}:\d{2},\d{3} --> .*\n/g, '')
       .replace(/\n+/g, ' ')
       .trim();
 
-    // 4. Делаем запрос к ChatGPT через локальный прокси (путь "/")
+    // 4. Отправляем базовые данные клиенту сразу
+    const videoInfo = {
+      title: downsubData.data.title,
+      description: downsubData.data.metadata?.description,
+      thumbnail: downsubData.data.thumbnail,
+      author: downsubData.data.metadata?.author,
+      publishDate: downsubData.data.metadata?.publishDate,
+    };
+
+    res.json({ status: 'processing', ...videoInfo });
+
+    // 5. В фоновом режиме — генерим саммари и шлём в OpenAI
     const gptResponse = await fetch(`http://localhost:${PORT}/`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -58,29 +72,25 @@ app.post('/srt-summary', async (req, res) => {
         messages: [
           {
             role: 'system',
-            content: 'Ты ассистент, который создает краткое, структурированное саммари для видео по субтитрам.'
+            content: 'Ты ассистент, который делает краткое, понятное саммари по видео.'
           },
           {
             role: 'user',
-            content: `Вот субтитры с видео:\n\n${plainText}\n\nСделай по ним краткое саммари на русском языке. Структурируй его как 3–5 пунктов с абзацами.`
+            content: `Вот субтитры видео:\n\n${plainText}\n\nСделай краткое саммари из 3–5 пунктов. Пиши на русском.`
           }
         ]
       })
     });
 
     const gptData = await gptResponse.json();
+    const summary = gptData.choices?.[0]?.message?.content || 'Саммари не получено';
 
-    if (!gptData.choices) {
-      console.error('GPT Error:', gptData);
-      return res.status(500).json({ error: 'Ошибка от GPT' });
-    }
-
-    const summary = gptData.choices[0].message.content;
-    res.json({ summary });
+    // ❗ Куда отправлять результат саммари? (Например, WebSocket или сделать отдельный второй вызов?)
+    console.log('\n📌 Саммари готово:\n', summary, '\n');
 
   } catch (error) {
     console.error('Ошибка в /srt-summary:', error);
-    res.status(500).json({ error: error.message || 'Ошибка при генерации саммари' });
+    res.status(500).json({ error: 'Ошибка сервера при обработке субтитров' });
   }
 });
 
