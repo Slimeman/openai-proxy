@@ -48,7 +48,6 @@ app.post('/srt-summary', async (req, res) => {
     const downsubData = await downsubRes.json();
     const subtitles = downsubData?.data?.subtitles || [];
 
-    // 🔍 Ищем субтитры на русском
     const ruSub = subtitles.find(sub => sub.language.toLowerCase().includes('russian'));
     const srtUrl = ruSub?.formats?.find(f => f.format === 'srt')?.url;
     const txtUrl = ruSub?.formats?.find(f => f.format === 'txt')?.url;
@@ -58,54 +57,50 @@ app.post('/srt-summary', async (req, res) => {
       return res.status(404).json({ error: 'SRT или TXT субтитры на русском не найдены' });
     }
 
-   // Загружаем текст из txt
-const txtText = txtUrl ? await (await fetch(txtUrl)).text() : '';
-const plainText = txtText.trim();
+    // Загружаем текст из TXT
+    const txtText = txtUrl ? await (await fetch(txtUrl)).text() : '';
+    const plainText = txtText.trim();
 
+    const meta = {
+      title: downsubData.data.title,
+      description: downsubData.data.metadata?.description,
+      thumbnail: downsubData.data.thumbnail,
+      author: downsubData.data.metadata?.author,
+      publishDate: downsubData.data.metadata?.publishDate,
+    };
 
-// Метаданные
-const meta = {
-  title: downsubData.data.title,
-  description: downsubData.data.metadata?.description,
-  thumbnail: downsubData.data.thumbnail,
-  author: downsubData.data.metadata?.author,
-  publishDate: downsubData.data.metadata?.publishDate,
-};
-
-// Кешируем результат
-summaryCache[videoId] = { plainText, summary: null, meta };
-
+    summaryCache[videoId] = { plainText, summary: null, meta };
 
     // GPT-саммари
-const prompt = `Вот субтитры видео:\n\n${plainText}\n\nСделай краткое саммари из 3–5 пунктов. Пиши на русском.`;
-
+    const prompt = `
+Вот субтитры видео:
 
 ${plainText}
+
+Сделай краткое саммари из 3–5 пунктов. Пиши на русском.
 `.trim();
 
-const gptRes = await fetch(`http://localhost:${PORT}/`, {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    messages: [
-      {
-        role: 'system',
-        content: 'Ты ассистент, который делает краткое, понятное саммари по видео.'
-      },
-      {
-        role: 'user',
-        content: prompt
-      }
-    ]
-  })
-});
-
+    const gptRes = await fetch(`http://localhost:${PORT}/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        messages: [
+          {
+            role: 'system',
+            content: 'Ты ассистент, который делает краткое, понятное саммари по видео.'
+          },
+          {
+            role: 'user',
+            content: prompt
+          }
+        ]
+      })
+    });
 
     const gptData = await gptRes.json();
     const summary = gptData.choices?.[0]?.message?.content || 'Саммари не получено';
     summaryCache[videoId].summary = summary;
 
-    // Ответ клиенту
     res.json({
       ...meta,
       summary,
@@ -118,26 +113,6 @@ const gptRes = await fetch(`http://localhost:${PORT}/`, {
     console.error('Ошибка в /srt-summary:', error);
     res.status(500).json({ error: 'Ошибка сервера при обработке субтитров' });
   }
-});
-
-// 💾 Опциональный маршрут для локального скачивания TXT
-app.get('/download-text', (req, res) => {
-  const { videoId } = req.query;
-  if (!videoId) return res.status(400).send('videoId is required');
-
-  const cached = summaryCache[videoId];
-  if (!cached || !cached.plainText) {
-    return res.status(404).send('Файл не найден');
-  }
-
-  // Безопасное имя файла
-  const rawTitle = cached.meta?.title || 'video';
-  const safeTitle = rawTitle.normalize("NFKD").replace(/[^\w\s-]/g, '').replace(/\s+/g, '_');
-  const filename = safeTitle + '.txt';
-
-  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-  res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-  res.send(cached.plainText);
 });
 
 // ✅ OpenAI Proxy (остается как есть)
