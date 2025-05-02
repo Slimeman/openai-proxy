@@ -216,16 +216,21 @@ app.post('/gemini-summary', async (req, res) => {
 `.trim();
 
   try {
- const result = await genAI.models.generateContent({
+const result = await genAI.models.generateContent({
   model: 'models/gemini-1.5-pro',
   contents: [
     {
-      parts: [
-        { text: prompt }
-      ]
+      role: 'user',
+      parts: [{ text: prompt }]
     }
   ]
 });
+
+console.log('Gemini raw:', JSON.stringify(result, null, 2));
+
+const text = result?.response?.candidates?.[0]?.content?.parts?.[0]?.text || 'Ответ не получен';
+res.json({ summary: text });
+
 
 // ✅ Распарсим ответ вручную
 const candidates = result.response.candidates;
