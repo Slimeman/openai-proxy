@@ -77,22 +77,30 @@ app.post('/srt-summary', async (req, res) => {
     summaryCache[videoId] = { plainText, summary: null, meta };
 
     // GPT-саммари
-    const gptRes = await fetch(`http://localhost:${PORT}/`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        messages: [
-          {
-            role: 'system',
-            content: 'Ты получил текст'
-          },
-          {
-            role: 'user',
-            content: `Вот текст:\n\n${plainText}\n\n отдай мне обратно этот текст, без инзменений`
-          }
-        ]
-      })
-    });
+const prompt = `
+Я отправлю тебе текст субтитров с YouTube. Просто верни мне точно тот же текст, без изменений. Это тест.
+Вот текст:
+
+${plainText}
+`.trim();
+
+const gptRes = await fetch(`http://localhost:${PORT}/`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    messages: [
+      {
+        role: 'system',
+        content: 'Ты просто ассистент, который возвращает полученный текст.'
+      },
+      {
+        role: 'user',
+        content: prompt
+      }
+    ]
+  })
+});
+
 
     const gptData = await gptRes.json();
     const summary = gptData.choices?.[0]?.message?.content || 'Саммари не получено';
