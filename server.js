@@ -11,7 +11,6 @@ const PORT = process.env.PORT || 3000;
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY;
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
 // 🔗 Google Gemini SDK init
 const genAI = new GoogleGenAI(GEMINI_API_KEY);
