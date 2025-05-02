@@ -216,19 +216,21 @@ app.post('/gemini-summary', async (req, res) => {
 `.trim();
 
   try {
-    const result = await genAI.models.generateContent({
-      model: "models/gemini-2.0-flash",
-      contents: [
-        {
-          parts: [
-            { text: prompt }
-          ]
-        }
+ const result = await genAI.models.generateContent({
+  model: 'models/gemini-2.0-flash',
+  contents: [
+    {
+      parts: [
+        { text: prompt }
       ]
-    });
+    }
+  ]
+});
 
-    const text = result.response.text();
-    res.json({ summary: text });
+// ✅ Распарсим ответ вручную
+const candidates = result.response.candidates;
+const text = candidates?.[0]?.content?.parts?.[0]?.text || 'Ответ не получен';
+res.json({ summary: text });
 
   } catch (error) {
     console.error('Gemini error:', error);
