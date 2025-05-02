@@ -58,20 +58,10 @@ app.post('/srt-summary', async (req, res) => {
       return res.status(404).json({ error: 'SRT или TXT субтитры на русском не найдены' });
     }
 
-    // Загружаем текст (из SRT)
-   // Загружаем текст (из SRT)
-const srtText = srtUrl ? await (await fetch(srtUrl)).text() : '';
+   // Загружаем текст из txt
+const txtText = txtUrl ? await (await fetch(txtUrl)).text() : '';
+const plainText = txtText.trim();
 
-// Преобразуем в чистый текст без таймингов и номеров
-const plainText = srtText
-  .split('\n\n') // разбиваем на блоки
-  .map(block => {
-    const lines = block.split('\n');
-    return lines.slice(2).join(' '); // пропускаем номер и тайминг
-  })
-  .join(' ')
-  .replace(/\s+/g, ' ') // убираем лишние пробелы
-  .trim();
 
 // Метаданные
 const meta = {
