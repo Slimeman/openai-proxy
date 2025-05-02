@@ -48,10 +48,13 @@ app.post('/srt-summary', async (req, res) => {
     const downsubData = await downsubRes.json();
     const subtitles = downsubData?.data?.subtitles || [];
 
-    const ruSub = subtitles.find(sub => sub.language.toLowerCase().includes('russian'));
-    const txtUrl = ruSub?.formats?.find(f => f.format === 'txt')?.url;
-    const srtUrl = ruSub?.formats?.find(f => f.format === 'srt')?.url;
-    const vttUrl = ruSub?.formats?.find(f => f.format === 'vtt')?.url;
+    // 🔍 Сначала пробуем на русском, потом на английском
+    let selectedSub = subtitles.find(sub => sub.language.toLowerCase().includes('russian')) ||
+                      subtitles.find(sub => sub.language.toLowerCase().includes('english'));
+
+    const srtUrl = selectedSub?.formats?.find(f => f.format === 'srt')?.url;
+    const txtUrl = selectedSub?.formats?.find(f => f.format === 'txt')?.url;
+    const vttUrl = selectedSub?.formats?.find(f => f.format === 'vtt')?.url;
 
     if (!txtUrl) {
       return res.status(404).json({ error: 'TXT субтитры на русском не найдены' });
