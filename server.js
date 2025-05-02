@@ -76,7 +76,7 @@ app.post('/srt-summary', async (req, res) => {
           },
           {
             role: 'user',
-            content: `Вот субтитры видео:\n\n${plainText}\n\nСделай краткое саммари из 3–5 пунктов. Пиши на русском.`
+            content: `Вот субтитры видео:\n\n${plainText}\n\nСделай хорошее саммари. Пиши на русском.`
           }
         ]
       })
