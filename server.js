@@ -13,8 +13,10 @@ const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY;
 
 // конст для Downsub
+// ✅ Кеш: по videoId
 const summaryCache = {}; // { [videoId]: { plainText, summary, meta } }
 
+// ✅ Утилита для извлечения YouTube ID
 function extractVideoId(url) {
   try {
     const u = new URL(url);
@@ -30,6 +32,7 @@ app.use(express.json());
 app.use(express.static('public'));
 
 // DOWNSub
+// ✅ Основной маршрут: получает субтитры и делает саммари
 app.post('/srt-summary', async (req, res) => {
   const { url } = req.body;
   const videoId = extractVideoId(url);
@@ -48,15 +51,18 @@ app.post('/srt-summary', async (req, res) => {
     const downsubData = await downsubRes.json();
     const subtitles = downsubData?.data?.subtitles || [];
 
-    const ruSrtUrl = subtitles
-      .find(sub => sub.language.toLowerCase().includes('russian'))
-      ?.formats?.find(f => f.format === 'srt')?.url;
+    // 🔍 Ищем субтитры на русском
+    const ruSub = subtitles.find(sub => sub.language.toLowerCase().includes('russian'));
+    const srtUrl = ruSub?.formats?.find(f => f.format === 'srt')?.url;
+    const txtUrl = ruSub?.formats?.find(f => f.format === 'txt')?.url;
+    const vttUrl = ruSub?.formats?.find(f => f.format === 'vtt')?.url;
 
-    if (!ruSrtUrl) {
-      return res.status(404).json({ error: 'Русский SRT не найден' });
+    if (!srtUrl && !txtUrl) {
+      return res.status(404).json({ error: 'SRT или TXT субтитры на русском не найдены' });
     }
 
-    const srtText = await (await fetch(ruSrtUrl)).text();
+    // 📥 Загружаем SRT (если есть) и чистим
+    const srtText = srtUrl ? await (await fetch(srtUrl)).text() : '';
     const plainText = srtText
       .replace(/\d+\n/g, '')
       .replace(/\d{2}:\d{2}:\d{2},\d{3} --> .*\n/g, '')
@@ -71,9 +77,10 @@ app.post('/srt-summary', async (req, res) => {
       publishDate: downsubData.data.metadata?.publishDate,
     };
 
-    // ✅ сохраняем по videoId
+    // 💾 Кешируем текст
     summaryCache[videoId] = { plainText, summary: null, meta };
 
+    // 🧠 Отправляем в GPT
     const gptRes = await fetch(`http://localhost:${PORT}/`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -98,7 +105,9 @@ app.post('/srt-summary', async (req, res) => {
     res.json({
       ...meta,
       summary,
-      downloadUrl: `/download-text?videoId=${videoId}`
+      srtUrl,
+      txtUrl,
+      vttUrl
     });
 
   } catch (error) {
@@ -107,7 +116,7 @@ app.post('/srt-summary', async (req, res) => {
   }
 });
 
-// 📄 Скачивание субтитров
+// 📄 (опционально, можно оставить): скачивание с сервера
 app.get('/download-text', (req, res) => {
   const { videoId } = req.query;
   if (!videoId) return res.status(400).send('videoId is required');
@@ -122,7 +131,6 @@ app.get('/download-text', (req, res) => {
   res.setHeader('Content-Type', 'text/plain; charset=utf-8');
   res.send(cached.plainText);
 });
-
 
 // ✅ OpenAI Proxy (остается как есть)
 app.post('/', async (req, res) => {
