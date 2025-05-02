@@ -210,7 +210,7 @@ app.post('/gemini-summary', async (req, res) => {
 
   try {
 const result = await genAI.models.generateContent({
-  model: 'models/gemini-1.5-pro',
+  model: 'models/gemini-2.5-pro-preview-03-25',
   contents: [
     {
       role: 'user',
