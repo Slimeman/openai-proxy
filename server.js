@@ -13,10 +13,8 @@ const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY;
 
 // конст для Downsub
-// ✅ Кеш: по videoId
-const summaryCache = {}; // { [videoId]: { plainText, summary, meta } }
+const summaryCache = {};
 
-// ✅ Утилита для извлечения YouTube ID
 function extractVideoId(url) {
   try {
     const u = new URL(url);
@@ -32,7 +30,6 @@ app.use(express.json());
 app.use(express.static('public'));
 
 // DOWNSub
-// ✅ Основной маршрут: получает субтитры и делает саммари
 app.post('/srt-summary', async (req, res) => {
   const { url } = req.body;
   const videoId = extractVideoId(url);
@@ -61,7 +58,7 @@ app.post('/srt-summary', async (req, res) => {
       return res.status(404).json({ error: 'SRT или TXT субтитры на русском не найдены' });
     }
 
-    // 📥 Загружаем SRT (если есть) и чистим
+    // Загружаем текст (из SRT)
     const srtText = srtUrl ? await (await fetch(srtUrl)).text() : '';
     const plainText = srtText
       .replace(/\d+\n/g, '')
@@ -77,10 +74,9 @@ app.post('/srt-summary', async (req, res) => {
       publishDate: downsubData.data.metadata?.publishDate,
     };
 
-    // 💾 Кешируем текст
     summaryCache[videoId] = { plainText, summary: null, meta };
 
-    // 🧠 Отправляем в GPT
+    // GPT-саммари
     const gptRes = await fetch(`http://localhost:${PORT}/`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -102,6 +98,7 @@ app.post('/srt-summary', async (req, res) => {
     const summary = gptData.choices?.[0]?.message?.content || 'Саммари не получено';
     summaryCache[videoId].summary = summary;
 
+    // Ответ клиенту
     res.json({
       ...meta,
       summary,
@@ -116,7 +113,7 @@ app.post('/srt-summary', async (req, res) => {
   }
 });
 
-// 📄 (опционально, можно оставить): скачивание с сервера
+// 💾 Опциональный маршрут для локального скачивания TXT
 app.get('/download-text', (req, res) => {
   const { videoId } = req.query;
   if (!videoId) return res.status(400).send('videoId is required');
@@ -126,7 +123,11 @@ app.get('/download-text', (req, res) => {
     return res.status(404).send('Файл не найден');
   }
 
-  const filename = (cached.meta?.title || 'video').replace(/[<>:"/\\|?*]+/g, '') + '.txt';
+  // Безопасное имя файла
+  const rawTitle = cached.meta?.title || 'video';
+  const safeTitle = rawTitle.normalize("NFKD").replace(/[^\w\s-]/g, '').replace(/\s+/g, '_');
+  const filename = safeTitle + '.txt';
+
   res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
   res.setHeader('Content-Type', 'text/plain; charset=utf-8');
   res.send(cached.plainText);
