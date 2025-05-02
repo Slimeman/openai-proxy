@@ -217,7 +217,7 @@ app.post('/gemini-summary', async (req, res) => {
 
   try {
  const result = await genAI.models.generateContent({
-  model: 'models/gemini-2.0-flash',
+  model: 'models/gemini-1.5-pro',
   contents: [
     {
       parts: [
