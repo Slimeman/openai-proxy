@@ -84,11 +84,11 @@ app.post('/srt-summary', async (req, res) => {
         messages: [
           {
             role: 'system',
-            content: 'Ты получил текст, верни мне его обратно без изменений'
+            content: 'Ты получил текст'
           },
           {
             role: 'user',
-            content: `Вот субтитры видео:\n\n${plainText}\n\nСделай хорошее саммари. Пиши на русском.`
+            content: `Вот текст:\n\n${plainText}\n\n отдай мне обратно этот текст, без инзменений`
           }
         ]
       })
