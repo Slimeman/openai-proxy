@@ -153,50 +153,109 @@ ${intermediateSummaries.join('\n\n')}
 });
 
 // Downsub таймкоды
-// Новый endpoint для генерации таймкодов
-app.post('/generate-timestamps', async (req, res) => {
-  const { srt } = req.body;
-
-  if (!srt || typeof srt !== 'string' || srt.length < 10) {
-    return res.status(400).json({ error: 'Некорректный или пустой SRT текст' });
-  }
-
-  // Разбиваем на чанки если слишком длинный текст (например > 12000 символов)
-  const chunks = [];
-  const chunkSize = 12000;
-  for (let i = 0; i < srt.length; i += chunkSize) {
-    chunks.push(srt.slice(i, i + chunkSize));
-  }
-
-  const messages = [
-    { role: 'system', content: 'Ты SEO-специалист и монтажёр, создающий кликабельные таймкоды для длинных видео.' },
-    { role: 'user', content: `Вот SRT субтитры с видео.
-Это может быть интервью или подкаст. Найди эмоциональные и ключевые моменты, а если это интервью — сосредоточься на вопросах интервьюера.
-Сделай от 20 до 25 SEO-оптимизированных таймкодов, если видео длинное (2 часа). Если видео короткое — сделай меньше. Формат:
-
-ММ:СС — Заголовок таймкода
-
-Заголовки должны быть кликабельными, заинтересовывающими, не длиннее 7 слов. Всё на русском языке.` }
-  ];
-
-  for (const chunk of chunks) {
-    messages.push({ role: 'user', content: chunk });
-  }
+// Новый маршрут: /srt-timestamps
+app.post('/srt-timestamps', async (req, res) => {
+  const { url } = req.body;
+  const videoId = extractVideoId(url);
+  if (!videoId) return res.status(400).json({ error: 'Некорректная ссылка YouTube' });
 
   try {
-    const gptRes = await fetch(`http://localhost:${PORT}/`, {
+    const downsubRes = await fetch('https://api.downsub.com/download', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages })
+      headers: {
+        'Authorization': `Bearer ${process.env.DOWNSUB_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ url })
     });
 
-    const gptData = await gptRes.json();
-    const result = gptData.choices?.[0]?.message?.content || 'Ошибка при генерации таймкодов';
-    res.json({ timestamps: result });
+    const downsubData = await downsubRes.json();
+    const subtitles = downsubData?.data?.subtitles || [];
+
+    // Сначала пробуем на русском, потом на английском
+    const selectedSub = subtitles.find(sub => sub.language.toLowerCase().includes('russian')) ||
+                         subtitles.find(sub => sub.language.toLowerCase().includes('english'));
+
+    const srtUrl = selectedSub?.formats?.find(f => f.format === 'srt')?.url;
+    if (!srtUrl) {
+      return res.status(404).json({ error: 'SRT субтитры не найдены' });
+    }
+
+    const srtText = await (await fetch(srtUrl)).text();
+
+    // Чанкование текста, если он слишком длинный
+    const chunks = [];
+    const chunkSize = 8000; // символов
+    for (let i = 0; i < srtText.length; i += chunkSize) {
+      chunks.push(srtText.slice(i, i + chunkSize));
+    }
+
+    let partialTimestamps = [];
+
+    for (let chunk of chunks) {
+      const chunkPrompt = `Вот часть субтитров в формате SRT:
+
+${chunk}
+
+Проанализируй и предложи временные метки (таймкоды) с описанием интересных, эмоциональных и важных моментов. Если это интервью — выдели моменты с вопросами. Пиши на русском.`;
+
+      const gptRes = await fetch(`http://localhost:${PORT}/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: [
+            {
+              role: 'system',
+              content: 'Ты ассистент, который делает SEO-таймкоды по субтитрам в SRT-формате. Таймкоды должны быть лаконичные, интересные, отображать суть обсуждаемого момента.'
+            },
+            {
+              role: 'user',
+              content: chunkPrompt
+            }
+          ]
+        })
+      });
+
+      const gptData = await gptRes.json();
+      const part = gptData.choices?.[0]?.message?.content || '';
+      partialTimestamps.push(part);
+    }
+
+    // Финальный объединяющий запрос
+    const finalPrompt = `Вот несколько фрагментов с таймкодами:
+
+${partialTimestamps.join('\n\n')}
+
+Собери финальный список SEO-таймкодов, убери повторы и выдай 15-25 лучших по важности, на русском языке.`;
+
+    const finalRes = await fetch(`http://localhost:${PORT}/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        messages: [
+          {
+            role: 'system',
+            content: 'Ты ассистент YouTube-подкастера. Твоя задача — на основе субтитров сделать финальный список SEO-таймкодов. Пиши только на русском.'
+          },
+          {
+            role: 'user',
+            content: finalPrompt
+          }
+        ]
+      })
+    });
+
+    const finalData = await finalRes.json();
+    const timestamps = finalData.choices?.[0]?.message?.content || 'Не удалось получить таймкоды';
+
+    res.json({
+      timestamps,
+      srtUrl
+    });
 
   } catch (error) {
-    console.error('Ошибка в /generate-timestamps:', error);
-    res.status(500).json({ error: 'Ошибка при генерации таймкодов' });
+    console.error('Ошибка в /srt-timestamps:', error);
+    res.status(500).json({ error: 'Ошибка сервера при обработке таймкодов' });
   }
 });
 
