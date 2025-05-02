@@ -3,8 +3,8 @@ const cors = require('cors');
 const fetch = require('node-fetch');
 require('dotenv').config();
 
-const { GoogleGenerativeAI } = require('@google/generative-ai');
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const { GoogleGenAI } = require('@google/genai');
+const genAI = new GoogleGenAI(process.env.GEMINI_API_KEY);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -210,21 +210,22 @@ app.post('/gemini-summary', async (req, res) => {
 
 Вот ссылка на видео: ${url}
 Если ты не можешь напрямую анализировать видео, скажи, какие шаги я должен сделать, чтобы ты смог его обработать.
-`.trim();
+  `.trim();
 
   try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    const text = response.text();
+    const result = await genAI.models.generateContent({
+      model: 'gemini-pro',
+      contents: [{ role: 'user', parts: [{ text: prompt }] }]
+    });
+
+    const text = result.response.text();
     res.json({ summary: text });
+
   } catch (error) {
     console.error('Gemini error:', error);
     res.status(500).json({ error: 'Ошибка от Gemini API' });
   }
 });
-
-
 
 app.listen(PORT, () => {
   console.log(`Proxy server running on port ${PORT}`);
