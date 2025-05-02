@@ -61,12 +61,10 @@ app.post('/srt-summary', async (req, res) => {
       publishDate: downsubData.data.metadata?.publishDate,
     };
 
-    // Сохраняем текст и мету
+    // Сохраняем в кеш
     summaryCache[url] = { plainText, summary: null, meta };
 
-    res.json({ status: 'processing', ...meta });
-
-    // Генерация саммари в фоне
+    // Сразу вызываем GPT и ждём ответа
     const gptRes = await fetch(`http://localhost:${PORT}/`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -87,6 +85,12 @@ app.post('/srt-summary', async (req, res) => {
     const gptData = await gptRes.json();
     const summary = gptData.choices?.[0]?.message?.content || 'Саммари не получено';
     summaryCache[url].summary = summary;
+
+    res.json({
+      ...meta,
+      summary,
+      downloadUrl: `/download-text?url=${encodeURIComponent(url)}`
+    });
 
   } catch (error) {
     console.error('Ошибка в /srt-summary:', error);
