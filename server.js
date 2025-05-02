@@ -59,22 +59,32 @@ app.post('/srt-summary', async (req, res) => {
     }
 
     // Загружаем текст (из SRT)
-    const srtText = srtUrl ? await (await fetch(srtUrl)).text() : '';
-    const plainText = srtText
-      .replace(/\d+\n/g, '')
-      .replace(/\d{2}:\d{2}:\d{2},\d{3} --> .*\n/g, '')
-      .replace(/\n+/g, ' ')
-      .trim();
+   // Загружаем текст (из SRT)
+const srtText = srtUrl ? await (await fetch(srtUrl)).text() : '';
 
-    const meta = {
-      title: downsubData.data.title,
-      description: downsubData.data.metadata?.description,
-      thumbnail: downsubData.data.thumbnail,
-      author: downsubData.data.metadata?.author,
-      publishDate: downsubData.data.metadata?.publishDate,
-    };
+// Преобразуем в чистый текст без таймингов и номеров
+const plainText = srtText
+  .split('\n\n') // разбиваем на блоки
+  .map(block => {
+    const lines = block.split('\n');
+    return lines.slice(2).join(' '); // пропускаем номер и тайминг
+  })
+  .join(' ')
+  .replace(/\s+/g, ' ') // убираем лишние пробелы
+  .trim();
 
-    summaryCache[videoId] = { plainText, summary: null, meta };
+// Метаданные
+const meta = {
+  title: downsubData.data.title,
+  description: downsubData.data.metadata?.description,
+  thumbnail: downsubData.data.thumbnail,
+  author: downsubData.data.metadata?.author,
+  publishDate: downsubData.data.metadata?.publishDate,
+};
+
+// Кешируем результат
+summaryCache[videoId] = { plainText, summary: null, meta };
+
 
     // GPT-саммари
 const prompt = `
