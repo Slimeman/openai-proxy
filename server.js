@@ -209,20 +209,20 @@ app.post('/gemini-summary', async (req, res) => {
 `.trim();
 
   try {
-    const result = await genAI.models.generateContent({
-      model: 'models/gemini-1.5-pro',
-      contents: [
-        {
-          role: 'user',
-          parts: [{ text: prompt }]
-        }
-      ]
-    });
+const result = await genAI.models.generateContent({
+  model: 'models/gemini-1.5-pro',
+  contents: [
+    {
+      role: 'user',
+      parts: [{ text: prompt }]
+    }
+  ]
+});
 
-    console.log('Gemini raw:', JSON.stringify(result, null, 2));
+console.log('Gemini raw:', JSON.stringify(result, null, 2));
 
-    const text = result?.response?.candidates?.[0]?.content?.parts?.[0]?.text || 'Ответ не получен';
-    res.json({ summary: text });
+const text = result?.candidates?.[0]?.content?.parts?.[0]?.text || 'Ответ не получен';
+res.json({ summary: text });
 
   } catch (error) {
     console.error('Gemini error:', error);
