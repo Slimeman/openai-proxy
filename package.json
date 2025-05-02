@@ -10,7 +10,7 @@
     "cors": "^2.8.5",
     "dotenv": "^16.0.3",
     "node-fetch": "^2.6.7",
-    "@google/generative-ai": "^1.0.0"
+    "@google/genai": "^0.3.0"
   }
 }
 
