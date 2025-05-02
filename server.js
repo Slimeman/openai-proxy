@@ -49,16 +49,15 @@ app.post('/srt-summary', async (req, res) => {
     const subtitles = downsubData?.data?.subtitles || [];
 
     const ruSub = subtitles.find(sub => sub.language.toLowerCase().includes('russian'));
-    const srtUrl = ruSub?.formats?.find(f => f.format === 'srt')?.url;
     const txtUrl = ruSub?.formats?.find(f => f.format === 'txt')?.url;
+    const srtUrl = ruSub?.formats?.find(f => f.format === 'srt')?.url;
     const vttUrl = ruSub?.formats?.find(f => f.format === 'vtt')?.url;
 
-    if (!srtUrl && !txtUrl) {
-      return res.status(404).json({ error: 'SRT или TXT субтитры на русском не найдены' });
+    if (!txtUrl) {
+      return res.status(404).json({ error: 'TXT субтитры на русском не найдены' });
     }
 
-    // Загружаем текст из TXT
-    const txtText = txtUrl ? await (await fetch(txtUrl)).text() : '';
+    const txtText = await (await fetch(txtUrl)).text();
     const plainText = txtText.trim();
 
     const meta = {
@@ -69,42 +68,76 @@ app.post('/srt-summary', async (req, res) => {
       publishDate: downsubData.data.metadata?.publishDate,
     };
 
-    summaryCache[videoId] = { plainText, summary: null, meta };
+    // Чанкование текста, если он слишком длинный
+    const chunks = [];
+    const chunkSize = 8000; // символов
+    for (let i = 0; i < plainText.length; i += chunkSize) {
+      chunks.push(plainText.slice(i, i + chunkSize));
+    }
 
-    // GPT-саммари
-    // ✅ Финальный промпт
-    const prompt = `
-Вот расшифровка видео. Сделай краткое и понятное саммари, отражающее главные идеи и мысли автора. Не повторяй всё подряд, а сделай выводы. Пиши по-русски, структурировано.
+    let intermediateSummaries = [];
 
-Текст:
+    for (let chunk of chunks) {
+      const chunkPrompt = `Вот часть субтитров видео:
 
-${plainText}
-    `.trim();
+${chunk}
 
-    const gptRes = await fetch(`http://localhost:${PORT}/`, {
+Сделай краткое саммари этой части. Пиши на русском.`;
+
+      const gptRes = await fetch(`http://localhost:${PORT}/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: [
+            {
+              role: 'system',
+              content: 'Ты ассистент, который делает краткое, понятное саммари по видео.'
+            },
+            {
+              role: 'user',
+              content: chunkPrompt
+            }
+          ]
+        })
+      });
+
+      const gptData = await gptRes.json();
+      const summary = gptData.choices?.[0]?.message?.content || '';
+      intermediateSummaries.push(summary);
+    }
+
+    // Объединяем все мини-саммари и делаем итоговое
+    const finalPrompt = `Вот несколько кратких саммари частей видео:
+
+${intermediateSummaries.join('\n\n')}
+
+На основе этого сделай финальное саммари. Пиши на русском.`;
+
+    const finalRes = await fetch(`http://localhost:${PORT}/`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         messages: [
           {
             role: 'system',
-            content: 'Ты ассистент популярного Ютубера, который делает краткое, понятное саммари по видео.'
+            content: 'Ты ассистент, который делает краткое, понятное саммари по видео.'
           },
           {
             role: 'user',
-            content: prompt
+            content: finalPrompt
           }
         ]
       })
     });
 
-    const gptData = await gptRes.json();
-    const summary = gptData.choices?.[0]?.message?.content || 'Саммари не получено';
-    summaryCache[videoId].summary = summary;
+    const finalData = await finalRes.json();
+    const finalSummary = finalData.choices?.[0]?.message?.content || 'Саммари не получено';
+
+    summaryCache[videoId] = { plainText, summary: finalSummary, meta };
 
     res.json({
       ...meta,
-      summary,
+      summary: finalSummary,
       srtUrl,
       txtUrl,
       vttUrl
@@ -115,6 +148,7 @@ ${plainText}
     res.status(500).json({ error: 'Ошибка сервера при обработке субтитров' });
   }
 });
+
 
 // ✅ OpenAI Proxy (остается как есть)
 app.post('/', async (req, res) => {
