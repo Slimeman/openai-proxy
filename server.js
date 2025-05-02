@@ -13,7 +13,16 @@ const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY;
 
 // конст для Downsub
-const summaryCache = {}; // { [url]: { plainText, summary, meta } }
+const summaryCache = {}; // { [videoId]: { plainText, summary, meta } }
+
+function extractVideoId(url) {
+  try {
+    const u = new URL(url);
+    return u.searchParams.get('v');
+  } catch {
+    return null;
+  }
+}
 
 // 🌍 Middlewares
 app.use(cors());
@@ -23,7 +32,8 @@ app.use(express.static('public'));
 // DOWNSub
 app.post('/srt-summary', async (req, res) => {
   const { url } = req.body;
-  if (!url) return res.status(400).json({ error: 'url is required' });
+  const videoId = extractVideoId(url);
+  if (!videoId) return res.status(400).json({ error: 'Некорректная ссылка YouTube' });
 
   try {
     const downsubRes = await fetch('https://api.downsub.com/download', {
@@ -61,10 +71,9 @@ app.post('/srt-summary', async (req, res) => {
       publishDate: downsubData.data.metadata?.publishDate,
     };
 
-    // Сохраняем в кеш
-    summaryCache[url] = { plainText, summary: null, meta };
+    // ✅ сохраняем по videoId
+    summaryCache[videoId] = { plainText, summary: null, meta };
 
-    // Сразу вызываем GPT и ждём ответа
     const gptRes = await fetch(`http://localhost:${PORT}/`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -84,12 +93,12 @@ app.post('/srt-summary', async (req, res) => {
 
     const gptData = await gptRes.json();
     const summary = gptData.choices?.[0]?.message?.content || 'Саммари не получено';
-    summaryCache[url].summary = summary;
+    summaryCache[videoId].summary = summary;
 
     res.json({
       ...meta,
       summary,
-      downloadUrl: `/download-text?url=${encodeURIComponent(url)}`
+      downloadUrl: `/download-text?videoId=${videoId}`
     });
 
   } catch (error) {
@@ -98,12 +107,12 @@ app.post('/srt-summary', async (req, res) => {
   }
 });
 
-// скачивание текста
+// 📄 Скачивание субтитров
 app.get('/download-text', (req, res) => {
-  const { url } = req.query;
-  if (!url) return res.status(400).send('url is required');
+  const { videoId } = req.query;
+  if (!videoId) return res.status(400).send('videoId is required');
 
-  const cached = summaryCache[url];
+  const cached = summaryCache[videoId];
   if (!cached || !cached.plainText) {
     return res.status(404).send('Файл не найден');
   }
@@ -113,7 +122,6 @@ app.get('/download-text', (req, res) => {
   res.setHeader('Content-Type', 'text/plain; charset=utf-8');
   res.send(cached.plainText);
 });
-
 
 
 // ✅ OpenAI Proxy (остается как есть)
