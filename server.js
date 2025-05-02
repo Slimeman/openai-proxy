@@ -152,6 +152,55 @@ ${intermediateSummaries.join('\n\n')}
   }
 });
 
+// Downsub таймкоды
+// Новый endpoint для генерации таймкодов
+app.post('/generate-timestamps', async (req, res) => {
+  const { srt } = req.body;
+
+  if (!srt || typeof srt !== 'string' || srt.length < 10) {
+    return res.status(400).json({ error: 'Некорректный или пустой SRT текст' });
+  }
+
+  // Разбиваем на чанки если слишком длинный текст (например > 12000 символов)
+  const chunks = [];
+  const chunkSize = 12000;
+  for (let i = 0; i < srt.length; i += chunkSize) {
+    chunks.push(srt.slice(i, i + chunkSize));
+  }
+
+  const messages = [
+    { role: 'system', content: 'Ты SEO-специалист и монтажёр, создающий кликабельные таймкоды для длинных видео.' },
+    { role: 'user', content: `Вот SRT субтитры с видео.
+Это может быть интервью или подкаст. Найди эмоциональные и ключевые моменты, а если это интервью — сосредоточься на вопросах интервьюера.
+Сделай от 20 до 25 SEO-оптимизированных таймкодов, если видео длинное (2 часа). Если видео короткое — сделай меньше. Формат:
+
+ММ:СС — Заголовок таймкода
+
+Заголовки должны быть кликабельными, заинтересовывающими, не длиннее 7 слов. Всё на русском языке.` }
+  ];
+
+  for (const chunk of chunks) {
+    messages.push({ role: 'user', content: chunk });
+  }
+
+  try {
+    const gptRes = await fetch(`http://localhost:${PORT}/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages })
+    });
+
+    const gptData = await gptRes.json();
+    const result = gptData.choices?.[0]?.message?.content || 'Ошибка при генерации таймкодов';
+    res.json({ timestamps: result });
+
+  } catch (error) {
+    console.error('Ошибка в /generate-timestamps:', error);
+    res.status(500).json({ error: 'Ошибка при генерации таймкодов' });
+  }
+});
+
+
 
 // ✅ OpenAI Proxy (остается как есть)
 app.post('/', async (req, res) => {
