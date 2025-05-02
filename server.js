@@ -23,7 +23,6 @@ app.post('/srt-summary', async (req, res) => {
   if (!url) return res.status(400).json({ error: 'url is required' });
 
   try {
-    // 1. Получаем ответ от Downsub
     const downsubRes = await fetch('https://api.downsub.com/download', {
       method: 'POST',
       headers: {
@@ -36,7 +35,6 @@ app.post('/srt-summary', async (req, res) => {
     const downsubData = await downsubRes.json();
     const subtitles = downsubData?.data?.subtitles || [];
 
-    // 2. Ищем русский SRT
     const ruSrtUrl = subtitles
       .find(sub => sub.language.toLowerCase().includes('russian'))
       ?.formats?.find(f => f.format === 'srt')?.url;
@@ -45,7 +43,6 @@ app.post('/srt-summary', async (req, res) => {
       return res.status(404).json({ error: 'Русский SRT не найден' });
     }
 
-    // 3. Скачиваем SRT и подготавливаем текст
     const srtText = await (await fetch(ruSrtUrl)).text();
     const plainText = srtText
       .replace(/\d+\n/g, '')
@@ -53,8 +50,7 @@ app.post('/srt-summary', async (req, res) => {
       .replace(/\n+/g, ' ')
       .trim();
 
-    // 4. Отправляем базовые данные клиенту сразу
-    const videoInfo = {
+    const meta = {
       title: downsubData.data.title,
       description: downsubData.data.metadata?.description,
       thumbnail: downsubData.data.thumbnail,
@@ -62,10 +58,13 @@ app.post('/srt-summary', async (req, res) => {
       publishDate: downsubData.data.metadata?.publishDate,
     };
 
-    res.json({ status: 'processing', ...videoInfo });
+    // Сохраняем текст и мету
+    summaryCache[url] = { plainText, summary: null, meta };
 
-    // 5. В фоновом режиме — генерим саммари и шлём в OpenAI
-    const gptResponse = await fetch(`http://localhost:${PORT}/`, {
+    res.json({ status: 'processing', ...meta });
+
+    // Генерация саммари в фоне
+    const gptRes = await fetch(`http://localhost:${PORT}/`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -82,11 +81,9 @@ app.post('/srt-summary', async (req, res) => {
       })
     });
 
-    const gptData = await gptResponse.json();
+    const gptData = await gptRes.json();
     const summary = gptData.choices?.[0]?.message?.content || 'Саммари не получено';
-
-    // ❗ Куда отправлять результат саммари? (Например, WebSocket или сделать отдельный второй вызов?)
-    console.log('\n📌 Саммари готово:\n', summary, '\n');
+    summaryCache[url].summary = summary;
 
   } catch (error) {
     console.error('Ошибка в /srt-summary:', error);
