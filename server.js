@@ -77,27 +77,28 @@ summaryCache[videoId] = { plainText, summary: null, meta };
 
 
     // GPT-саммари
-const prompt = `Вот текст видео:\n\n${plainText}\n\n Сделай саммари. Пиши на русском.`;
+const prompt = `Вот субтитры видео:\n\n${plainText}\n\nСделай краткое саммари из 3–5 пунктов. Пиши на русском.`;
+
 
 ${plainText}
 `.trim();
 
-    const gptRes = await fetch(`http://localhost:${PORT}/`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        messages: [
-          {
-            role: 'system',
-            content: 'Ты ассистент популярного Ютубера, который делает краткое, понятное саммари по видео, для того что бы он мог быстро изучать всю суть.'
-          },
-          {
-            role: 'user',
-            content: prompt
-          }
-        ]
-      })
-    });
+const gptRes = await fetch(`http://localhost:${PORT}/`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    messages: [
+      {
+        role: 'system',
+        content: 'Ты ассистент, который делает краткое, понятное саммари по видео.'
+      },
+      {
+        role: 'user',
+        content: prompt
+      }
+    ]
+  })
+});
 
 
     const gptData = await gptRes.json();
