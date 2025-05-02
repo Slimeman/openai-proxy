@@ -3,6 +3,9 @@ const cors = require('cors');
 const fetch = require('node-fetch');
 require('dotenv').config();
 
+const { GoogleGenerativeAI } = require('@google/generative-ai');
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -189,6 +192,37 @@ app.get('/youtube-trends', async (req, res) => {
   }
 });
 
+// ✅ подключение Gemini
+app.post('/gemini-summary', async (req, res) => {
+  const { url } = req.body;
+
+  if (!url) {
+    return res.status(400).json({ error: 'url is required' });
+  }
+
+  const prompt = `
+Ты — профессиональный медиаконсультант, помогающий подкастерам делать вирусный контент. Проанализируй это YouTube-видео и сделай подробное саммари:
+1. Основные темы и подтемы видео.
+2. Структура выпуска: как построен сюжет, интересные ходы.
+3. Что делает это видео интересным или вирусным?
+4. Какие фразы, визуальные приёмы или моменты вызвали бы интерес у зрителя?
+5. Как можно использовать идеи из этого видео для создания своего подкаста?
+
+Вот ссылка на видео: ${url}
+Если ты не можешь напрямую анализировать видео, скажи, какие шаги я должен сделать, чтобы ты смог его обработать.
+`.trim();
+
+  try {
+    const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const text = response.text();
+    res.json({ summary: text });
+  } catch (error) {
+    console.error('Gemini error:', error);
+    res.status(500).json({ error: 'Ошибка от Gemini API' });
+  }
+});
 
 
 
