@@ -193,7 +193,7 @@ app.post('/srt-timestamps', async (req, res) => {
     let partialTimestamps = [];
 
     for (let chunk of chunks) {
-  const chunkPrompt = `
+      const chunkPrompt = `
 Вот субтитры видео в формате SRT. Проанализируй их и создай SEO-оптимизированные таймкоды по следующим правилам:
 
 1. Сделай от 10 до 25 таймкодов для Youtube, в зависимости от длины видео.
@@ -206,9 +206,6 @@ app.post('/srt-timestamps', async (req, res) => {
 
 ${chunk}
 `.trim();
-
-
-Проанализируй, предложи временные метки-таймкоды с описанием интересных, эмоциональных и важных моментов. Если это интервью — выдели моменты с вопросами. Пиши на русском.`;
 
       const gptRes = await fetch(`http://localhost:${PORT}/`, {
         method: 'POST',
@@ -233,7 +230,7 @@ ${chunk}
     }
 
     // Финальный объединяющий запрос
-const finalPrompt = `
+    const finalPrompt = `
 Вот несколько черновых блоков с таймкодами, которые ты сгенерировал ранее. Объедини их в единый финальный список:
 
 ${partialTimestamps.join('\n\n')}
