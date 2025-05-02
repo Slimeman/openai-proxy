@@ -4,16 +4,21 @@ const fetch = require('node-fetch');
 require('dotenv').config();
 
 const { GoogleGenAI } = require('@google/genai');
-const genAI = new GoogleGenAI(process.env.GEMINI_API_KEY);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY;
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
+// 🔗 Google Gemini SDK init
+const genAI = new GoogleGenAI(GEMINI_API_KEY);
+
+// 🌍 Middlewares
 app.use(cors());
 app.use(express.json());
+app.use(express.static('public'));
 
 // ✅ OpenAI Proxy (остается как есть)
 app.post('/', async (req, res) => {
@@ -193,6 +198,7 @@ app.get('/youtube-trends', async (req, res) => {
 });
 
 // ✅ подключение Gemini
+// ✅ Новый маршрут для анализа YouTube-ссылки с помощью Gemini
 app.post('/gemini-summary', async (req, res) => {
   const { url } = req.body;
 
@@ -210,20 +216,26 @@ app.post('/gemini-summary', async (req, res) => {
 
 Вот ссылка на видео: ${url}
 Если ты не можешь напрямую анализировать видео, скажи, какие шаги я должен сделать, чтобы ты смог его обработать.
-  `.trim();
+`.trim();
 
   try {
     const result = await genAI.models.generateContent({
       model: 'gemini-pro',
-      contents: [{ role: 'user', parts: [{ text: prompt }] }]
+      contents: [
+        {
+          parts: [
+            { text: prompt }
+          ]
+        }
+      ]
     });
 
     const text = result.response.text();
     res.json({ summary: text });
 
   } catch (error) {
-    console.error('Gemini error:', error?.response?.status, error?.response?.statusText, await error?.response?.text?.());
-    res.status(500).json({ error: 'Ошибка от Gemini API' });
+    console.error('Gemini error:', error);
+    res.status(500).json({ error: error.message || 'Ошибка от Gemini API' });
   }
 });
 
