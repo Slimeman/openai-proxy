@@ -4,6 +4,7 @@ const fetch = require('node-fetch');
 require('dotenv').config();
 
 const { GoogleGenAI } = require('@google/genai');
+const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY }); // ✅ Правильно
 
 const app = express();
 const PORT = process.env.PORT || 3000;
