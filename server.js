@@ -17,6 +17,74 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static('public'));
 
+// DOWNSub
+app.post('/srt-summary', async (req, res) => {
+  const { url } = req.body;
+  if (!url) return res.status(400).json({ error: 'url is required' });
+
+  try {
+    // 1. Запрашиваем Downsub API
+    const downsubRes = await fetch('https://api.downsub.com/download', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.DOWNSUB_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ url })
+    });
+
+    const downsubData = await downsubRes.json();
+
+    if (!downsubRes.ok || !downsubData?.srt) {
+      console.error('Downsub error:', downsubData);
+      return res.status(500).json({ error: 'Ошибка при получении SRT с Downsub' });
+    }
+
+    // 2. Скачиваем SRT-файл
+    const srtText = await (await fetch(downsubData.srt)).text();
+
+    // 3. Превращаем SRT в plain text
+    const plainText = srtText
+      .replace(/\d+\n/g, '')
+      .replace(/\d{2}:\d{2}:\d{2},\d{3} --> .*\n/g, '')
+      .replace(/\n+/g, ' ')
+      .trim();
+
+    // 4. Делаем запрос к ChatGPT через локальный прокси (путь "/")
+    const gptResponse = await fetch(`http://localhost:${PORT}/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        messages: [
+          {
+            role: 'system',
+            content: 'Ты ассистент, который создает краткое, структурированное саммари для видео по субтитрам.'
+          },
+          {
+            role: 'user',
+            content: `Вот субтитры с видео:\n\n${plainText}\n\nСделай по ним краткое саммари на русском языке. Структурируй его как 3–5 пунктов с абзацами.`
+          }
+        ]
+      })
+    });
+
+    const gptData = await gptResponse.json();
+
+    if (!gptData.choices) {
+      console.error('GPT Error:', gptData);
+      return res.status(500).json({ error: 'Ошибка от GPT' });
+    }
+
+    const summary = gptData.choices[0].message.content;
+    res.json({ summary });
+
+  } catch (error) {
+    console.error('Ошибка в /srt-summary:', error);
+    res.status(500).json({ error: error.message || 'Ошибка при генерации саммари' });
+  }
+});
+
+
 // ✅ OpenAI Proxy (остается как есть)
 app.post('/', async (req, res) => {
   try {
