@@ -62,11 +62,20 @@ app.post('/downsub', async (req, res) => {
     console.error('Ошибка в /downsub:', error);
     res.status(500).json({ status: 'error', message: 'Ошибка при получении субтитров' });
   }
+
+
 // DOWNSub
 app.post('/srt-summary', async (req, res) => {
   const { url } = req.body;
-  const videoId = extractVideoId(url);
-  if (!videoId) return res.status(400).json({ error: 'Некорректная ссылка YouTube' });
+
+  const normalizedUrl = normalizeYouTubeUrl(url);
+
+  if (!normalizedUrl) {
+    return res.status(400).json({ error: 'Некорректная ссылка YouTube' });
+  }
+
+  // Извлекаем videoId из нормализованной ссылки
+  const videoId = new URL(normalizedUrl).searchParams.get('v');
 
   try {
     const downsubRes = await fetch('https://api.downsub.com/download', {
@@ -75,13 +84,12 @@ app.post('/srt-summary', async (req, res) => {
         'Authorization': `Bearer ${process.env.DOWNSUB_API_KEY}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ url })
+      body: JSON.stringify({ url: normalizedUrl })
     });
 
     const downsubData = await downsubRes.json();
     const subtitles = downsubData?.data?.subtitles || [];
 
-    // 🔍 Сначала пробуем на русском, потом на английском
     let selectedSub = subtitles.find(sub => sub.language.toLowerCase().includes('russian')) ||
                       subtitles.find(sub => sub.language.toLowerCase().includes('english'));
 
@@ -104,9 +112,9 @@ app.post('/srt-summary', async (req, res) => {
       publishDate: downsubData.data.metadata?.publishDate,
     };
 
-    // Чанкование текста, если он слишком длинный
+    // Чанкование текста
     const chunks = [];
-    const chunkSize = 8000; // символов
+    const chunkSize = 8000;
     for (let i = 0; i < plainText.length; i += chunkSize) {
       chunks.push(plainText.slice(i, i + chunkSize));
     }
@@ -114,11 +122,7 @@ app.post('/srt-summary', async (req, res) => {
     let intermediateSummaries = [];
 
     for (let chunk of chunks) {
-      const chunkPrompt = `Вот часть субтитров видео:
-
-${chunk}
-
-Сделай краткое саммари этой части. Пиши на русском.`;
+      const chunkPrompt = `Вот часть субтитров видео:\n\n${chunk}\n\nСделай краткое саммари этой части. Пиши на русском.`;
 
       const gptRes = await fetch(`http://localhost:${PORT}/`, {
         method: 'POST',
@@ -127,7 +131,7 @@ ${chunk}
           messages: [
             {
               role: 'system',
-              content: 'Ты ассистент успешного Ютубера интервьюера, который делает краткое, понятное саммари по видео. Твоя задача, сделать такое саммари, что бы можно было полностью понять видео и главных его частей. Постарайся определить интервью это или нет, если это интервью, то выведи все вопросы которые задал интервьюер.'
+              content: 'Ты ассистент успешного Ютубера интервьюера, который делает краткое, понятное саммари по видео...'
             },
             {
               role: 'user',
@@ -142,12 +146,7 @@ ${chunk}
       intermediateSummaries.push(summary);
     }
 
-    // Объединяем все мини-саммари и делаем итоговое
-    const finalPrompt = `Вот несколько кратких саммари частей видео:
-
-${intermediateSummaries.join('\n\n')}
-
-На основе этого сделай финальное саммари и если это интервью, то списко вопросов интервьюера. Пиши на русском.`;
+    const finalPrompt = `Вот несколько кратких саммари частей видео:\n\n${intermediateSummaries.join('\n\n')}\n\nНа основе этого сделай финальное саммари...`;
 
     const finalRes = await fetch(`http://localhost:${PORT}/`, {
       method: 'POST',
@@ -185,12 +184,20 @@ ${intermediateSummaries.join('\n\n')}
   }
 });
 
+
+const normalizeYouTubeUrl = require('./normalizeYouTubeUrl');
+
 // Downsub таймкоды
-// Новый маршрут: /srt-timestamps
 app.post('/srt-timestamps', async (req, res) => {
   const { url } = req.body;
-  const videoId = extractVideoId(url);
-  if (!videoId) return res.status(400).json({ error: 'Некорректная ссылка YouTube' });
+
+  const normalizedUrl = normalizeYouTubeUrl(url);
+
+  if (!normalizedUrl) {
+    return res.status(400).json({ error: 'Некорректная ссылка YouTube' });
+  }
+
+  const videoId = new URL(normalizedUrl).searchParams.get('v');
 
   try {
     const downsubRes = await fetch('https://api.downsub.com/download', {
@@ -199,26 +206,25 @@ app.post('/srt-timestamps', async (req, res) => {
         'Authorization': `Bearer ${process.env.DOWNSUB_API_KEY}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ url })
+      body: JSON.stringify({ url: normalizedUrl })
     });
 
     const downsubData = await downsubRes.json();
     const subtitles = downsubData?.data?.subtitles || [];
 
-    // Сначала пробуем на русском, потом на английском
     const selectedSub = subtitles.find(sub => sub.language.toLowerCase().includes('russian')) ||
                          subtitles.find(sub => sub.language.toLowerCase().includes('english'));
 
     const srtUrl = selectedSub?.formats?.find(f => f.format === 'srt')?.url;
+
     if (!srtUrl) {
       return res.status(404).json({ error: 'SRT субтитры не найдены' });
     }
 
     const srtText = await (await fetch(srtUrl)).text();
 
-    // Чанкование текста, если он слишком длинный
     const chunks = [];
-    const chunkSize = 8000; // символов
+    const chunkSize = 8000;
     for (let i = 0; i < srtText.length; i += chunkSize) {
       chunks.push(srtText.slice(i, i + chunkSize));
     }
@@ -247,7 +253,7 @@ ${chunk}
           messages: [
             {
               role: 'system',
-              content: 'Ты ассистент, который делает SEO-таймкоды по субтитрам в SRT-формате. Таймкоды должны быть лаконичные, интересные, отображать суть обсуждаемого момента.'
+              content: 'Ты ассистент, который делает SEO-таймкоды по субтитрам в SRT-формате...'
             },
             {
               role: 'user',
@@ -262,7 +268,6 @@ ${chunk}
       partialTimestamps.push(part);
     }
 
-    // Финальный объединяющий запрос
     const finalPrompt = `
 Вот несколько черновых блоков с таймкодами, которые ты сгенерировал ранее. Объедини их в единый финальный список:
 
