@@ -40,6 +40,12 @@ app.post('/downsub', async (req, res) => {
     return res.status(400).json({ status: 'error', message: 'YouTube URL is required' });
   }
 
+  const normalizedUrl = normalizeYouTubeUrl(url);
+
+  if (!normalizedUrl) {
+    return res.status(400).json({ status: 'error', message: 'Invalid YouTube URL format' });
+  }
+
   try {
     const response = await fetch('https://api.downsub.com/download', {
       method: 'POST',
@@ -47,7 +53,7 @@ app.post('/downsub', async (req, res) => {
         'Authorization': `Bearer ${process.env.DOWNSUB_API_KEY}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ url })
+      body: JSON.stringify({ url: normalizedUrl })
     });
 
     const data = await response.json();
@@ -56,8 +62,6 @@ app.post('/downsub', async (req, res) => {
     console.error('Ошибка в /downsub:', error);
     res.status(500).json({ status: 'error', message: 'Ошибка при получении субтитров' });
   }
-});
-
 // DOWNSub
 app.post('/srt-summary', async (req, res) => {
   const { url } = req.body;
