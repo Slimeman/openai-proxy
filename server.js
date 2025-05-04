@@ -185,8 +185,6 @@ app.post('/srt-summary', async (req, res) => {
 });
 
 
-const normalizeYouTubeUrl = require('./normalizeYouTubeUrl');
-
 // Downsub таймкоды
 app.post('/srt-timestamps', async (req, res) => {
   const { url } = req.body;
