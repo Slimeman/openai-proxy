@@ -366,30 +366,8 @@ app.get('/analyze-video', async (req, res) => {
     const language = snippet.defaultAudioLanguage || 'Не указано';
     const category = snippet.categoryId;
 
-    // 📈 Универсальный расчёт дохода с учётом языка, длительности, категории
-    let baseRPM = 0.008; // базовое значение — $8 за 1000
-
-    if (language && typeof language === 'string') {
-      const lang = language.toLowerCase();
-      if (lang.startsWith('en')) {
-        baseRPM += 0.004; // английский → +$4
-      }
-      // все остальные — как русский (без прибавки)
-    }
-
-    if (duration >= 10) {
-      baseRPM += 0.003; // длинное видео → mid-roll реклама
-    } else if (duration < 3) {
-      baseRPM -= 0.003; // короткое видео → меньше рекламы
-    }
-
-    if (['1', '20', '24'].includes(category)) {
-      baseRPM -= 0.002; // категории с меньшим RPM
-    }
-
-    const rpmLow = Math.max(baseRPM * 0.8, 0.002); // минимум $2 RPM
-    const rpmHigh = baseRPM * 1.2;
-    const revenue = [views * rpmLow, views * rpmHigh];
+    // 💰 Реалистичная оценка дохода
+    const revenue = estimateRevenueRange(views, language, duration, category);
 
     const publishDate = new Date(snippet.publishedAt);
     const now = new Date();
@@ -428,6 +406,49 @@ function parseDuration(isoDuration) {
   const seconds = parseInt(match[3] || 0);
   return hours * 60 + minutes + seconds / 60;
 }
+
+// 💰 Оценка дохода с учётом языка, длительности и жанра
+function estimateRevenueRange(views, language, duration, categoryId) {
+  let baseRPM = 0.008; // базовый RPM = $8 за 1000 просмотров
+
+  // 🎯 Язык
+  if (language && typeof language === 'string') {
+    const lang = language.toLowerCase();
+    if (lang.startsWith('en')) baseRPM += 0.004; // английский → выше CPM
+    // остальные — считаем как русский
+  }
+
+  // ⏱️ Длительность видео
+  if (duration < 3) baseRPM -= 0.004;
+  else if (duration < 8) baseRPM -= 0.002;
+  else if (duration <= 20) baseRPM += 0.003;
+  else baseRPM += 0.005;
+
+  // 🎬 Категория YouTube — реальный CPM по жанрам
+  const categoryCPM = {
+    '1': -0.002,  // Фильмы
+    '10': -0.004, // Музыка
+    '17': +0.002, // Спорт
+    '19': +0.002, // Путешествия
+    '20': -0.003, // Игры
+    '22':  0,     // Люди и блоги
+    '23': -0.002, // Юмор
+    '24': -0.002, // Развлечения
+    '25': +0.003, // Новости
+    '26': +0.002, // Хендмейд / стиль
+    '27': +0.004, // Образование
+    '28': +0.005  // Наука и технологии
+  };
+
+  baseRPM += categoryCPM[categoryId] || 0;
+
+  // 🧮 Итоговая формула дохода
+  const rpmLow = Math.max(baseRPM * 0.8, 0.002); // минимум $2 RPM
+  const rpmHigh = baseRPM * 1.25;
+
+  return [views * rpmLow, views * rpmHigh];
+}
+
 
 
 // ✅ Новый SEO-оптимизатор
