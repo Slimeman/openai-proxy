@@ -335,7 +335,7 @@ app.post('/', async (req, res) => {
   }
 });
 
-// ✅ Новый маршрут для получения заголовка с YouTube
+// ✅ Аналитика YouTube. Новый маршрут для получения заголовка и метрик по видео
 app.get('/analyze-video', async (req, res) => {
   const videoId = req.query.videoId;
   if (!videoId) {
@@ -355,13 +355,42 @@ app.get('/analyze-video', async (req, res) => {
     const item = data.items[0];
     const stats = item.statistics;
     const snippet = item.snippet;
-    const duration = parseDuration(item.contentDetails.duration); // ISO 8601 → минуты
+    const contentDetails = item.contentDetails;
+    const duration = parseDuration(contentDetails.duration); // ISO 8601 → минуты
 
     const views = parseInt(stats.viewCount || 0);
     const likes = parseInt(stats.likeCount || 0);
-    const comments = parseInt(stats.commentCount || 0); // ✅ теперь есть
+    const comments = parseInt(stats.commentCount || 0);
     const engagement = ((likes + comments) / views) * 100 || 0;
-    const revenue = [views * 0.001, views * 0.005];
+
+    const language = snippet.defaultAudioLanguage || 'Не указано';
+    const category = snippet.categoryId;
+
+    // 📈 Универсальный расчёт дохода с учётом языка, длительности, категории
+    let baseRPM = 0.008; // базовое значение — $8 за 1000
+
+    if (language && typeof language === 'string') {
+      const lang = language.toLowerCase();
+      if (lang.startsWith('en')) {
+        baseRPM += 0.004; // английский → +$4
+      }
+      // все остальные — как русский (без прибавки)
+    }
+
+    if (duration >= 10) {
+      baseRPM += 0.003; // длинное видео → mid-roll реклама
+    } else if (duration < 3) {
+      baseRPM -= 0.003; // короткое видео → меньше рекламы
+    }
+
+    if (['1', '20', '24'].includes(category)) {
+      baseRPM -= 0.002; // категории с меньшим RPM
+    }
+
+    const rpmLow = Math.max(baseRPM * 0.8, 0.002); // минимум $2 RPM
+    const rpmHigh = baseRPM * 1.2;
+    const revenue = [views * rpmLow, views * rpmHigh];
+
     const publishDate = new Date(snippet.publishedAt);
     const now = new Date();
     const ageInDays = Math.max((now - publishDate) / (1000 * 60 * 60 * 24), 1);
@@ -370,18 +399,18 @@ app.get('/analyze-video', async (req, res) => {
     res.json({
       channelTitle: snippet.channelTitle,
       title: snippet.title,
-      description: snippet.description, // ✅ добавили описание
+      description: snippet.description,
       thumbnail: snippet.thumbnails?.medium?.url,
-      language: snippet.defaultAudioLanguage || 'Не указано',
+      language,
       publishedAt: snippet.publishedAt,
       duration: duration.toFixed(2),
       views,
       likes,
-      comments, // ✅ теперь возвращаем
+      comments,
       engagement: engagement.toFixed(2),
       revenueRange: revenue.map(r => `$${r.toFixed(2)}`),
       avgViewsPerDay: Math.round(avgViewsPerDay),
-      category: snippet.categoryId,
+      category,
       growthStatus: avgViewsPerDay < 30 ? 'низкий' : avgViewsPerDay < 100 ? 'средний' : 'хороший',
     });
 
@@ -399,6 +428,7 @@ function parseDuration(isoDuration) {
   const seconds = parseInt(match[3] || 0);
   return hours * 60 + minutes + seconds / 60;
 }
+
 
 // ✅ Новый SEO-оптимизатор
 app.get('/seo-optimize', async (req, res) => {
