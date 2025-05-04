@@ -29,6 +29,32 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static('public'));
 
+// 🔽 Новый эндпоинт Downsub для получения всех субтитров и форматов для HTML страницы
+app.post('/downsub', async (req, res) => {
+  const { url } = req.body;
+
+  if (!url) {
+    return res.status(400).json({ status: 'error', message: 'YouTube URL is required' });
+  }
+
+  try {
+    const response = await fetch('https://api.downsub.com/download', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.DOWNSUB_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ url })
+    });
+
+    const data = await response.json();
+    res.json(data);
+  } catch (error) {
+    console.error('Ошибка в /downsub:', error);
+    res.status(500).json({ status: 'error', message: 'Ошибка при получении субтитров' });
+  }
+});
+
 // DOWNSub
 app.post('/srt-summary', async (req, res) => {
   const { url } = req.body;
