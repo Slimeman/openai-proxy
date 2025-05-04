@@ -62,7 +62,7 @@ app.post('/downsub', async (req, res) => {
     console.error('Ошибка в /downsub:', error);
     res.status(500).json({ status: 'error', message: 'Ошибка при получении субтитров' });
   }
-
+});
 
 // DOWNSub
 app.post('/srt-summary', async (req, res) => {
