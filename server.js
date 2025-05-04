@@ -12,6 +12,9 @@ const PORT = process.env.PORT || 3000;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY;
 
+// подключаю файл переработки ссылок Ютуб
+const normalizeYouTubeUrl = require('./normalizeYouTubeUrl');
+
 // конст для Downsub
 const summaryCache = {};
 
